@@ -1,0 +1,8 @@
+﻿<Window x:Class="dziennik.Uczenlogin"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Uczenlogin" Height="350" Width="525">
+    <Grid>
+        <TreeView x:Name="DrzewkoOcen" HorizontalAlignment="Left" Height="300" VerticalAlignment="Top" Width="500"/>
+    </Grid>
+</Window>
