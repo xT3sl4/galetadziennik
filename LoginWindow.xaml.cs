@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Data.SqlClient;
+using System.Xml.Serialization;
 
 namespace dziennik
 {
@@ -10,40 +11,87 @@ namespace dziennik
     {
         private string connectionString;
 
-        public LoginWindow()
+        public LoginWindow(string PESEL)
         {
+            string pesel = PESEL;
             InitializeComponent();
             connectionString = "Data Source=10.1.49.186;Initial Catalog=Szkola;User ID=admin2;Password=zaq1@WSX;Connect Timeout=30;Encrypt=True;TrustServerCertificate=True;";
-            WyswietlUczniow();
+            bool isDirector = false;
+
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+                string query = "SELECT COUNT(*) FROM nauczyciele WHERE pesel = @pesel AND czy_dyrektor = 1";
+                SqlCommand command = new SqlCommand(query, connection);
+                command.Parameters.AddWithValue("@pesel", pesel);
+                int count = (int)command.ExecuteScalar();
+                if (count > 0)
+                {
+                    isDirector = true;
+                    DodajUczniaButton.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    DodajUczniaButton.Visibility = Visibility.Collapsed;
+                }
+            }
+
+            WyswietlUczniow(pesel, isDirector);
         }
 
-        private void WyswietlUczniow()
+        private void WyswietlUczniow(string pesel, bool isDirector)
         {
             using (SqlConnection connection = new SqlConnection(connectionString))
             {
                 connection.Open();
-                string query = "SELECT imie, nazwisko, klasa FROM uczniowie ";
+                string query1;
+                SqlCommand command1;
 
-                SqlCommand command = new SqlCommand(query, connection);
-                SqlDataReader reader = command.ExecuteReader();
+                if (isDirector)
+                {
+                    query1 = "SELECT id FROM dbo.klasy";
+                    command1 = new SqlCommand(query1, connection);
+                }
+                else
+                {
+                    query1 = "SELECT id FROM dbo.klasy WHERE wychowawca = @pesel";
+                    command1 = new SqlCommand(query1, connection);
+                    command1.Parameters.AddWithValue("@pesel", pesel);
+                }
+
+                SqlDataReader reader1 = command1.ExecuteReader();
+                List<string> klasy = new List<string>();
+
+                while (reader1.Read())
+                {
+                    klasy.Add(reader1["id"].ToString());
+                }
+                reader1.Close();
 
                 Dictionary<string, TreeViewItem> drzewko = new Dictionary<string, TreeViewItem>();
 
-                while (reader.Read())
+                foreach (string klasa in klasy)
                 {
-                    string klasa = reader["klasa"].ToString();
-                    string fullName = $"{reader["imie"]} {reader["nazwisko"]}";
+                    string query = "SELECT imie, nazwisko FROM uczniowie WHERE klasa=@klasa";
+                    SqlCommand command = new SqlCommand(query, connection);
+                    command.Parameters.AddWithValue("@klasa", klasa);
+                    SqlDataReader reader = command.ExecuteReader();
 
-                    if (!drzewko.ContainsKey(klasa))
+                    while (reader.Read())
                     {
-                        TreeViewItem classNode = new TreeViewItem() { Header = klasa };
-                        drzewko[klasa] = classNode;
-                        DrzewkoUczniowie.Items.Add(classNode);
-                    }
+                        string fullName = $"{reader["imie"]} {reader["nazwisko"]}";
 
-                    drzewko[klasa].Items.Add(new TreeViewItem() { Header = fullName });
+                        if (!drzewko.ContainsKey(klasa))
+                        {
+                            TreeViewItem classNode = new TreeViewItem() { Header = klasa };
+                            drzewko[klasa] = classNode;
+                            DrzewkoUczniowie.Items.Add(classNode);
+                        }
+
+                        drzewko[klasa].Items.Add(new TreeViewItem() { Header = fullName });
+                    }
+                    reader.Close();
                 }
-                reader.Close();
             }
         }
 
@@ -69,11 +117,11 @@ namespace dziennik
             {
                 connection.Open();
                 string query = @"
-                        SELECT uczniowie.PESEL, uczniowie.punkty, oceny.ocena, przedmioty.nazwa 
-                        FROM uczniowie
-                        JOIN oceny ON uczniowie.PESEL = oceny.Id_ucznia
-                        JOIN przedmioty ON oceny.Id_przedmiotu = przedmioty.Id
-                        WHERE uczniowie.imie = @imie AND uczniowie.nazwisko = @nazwisko";
+                            SELECT uczniowie.PESEL, uczniowie.punkty, oceny.ocena, przedmioty.nazwa 
+                            FROM uczniowie
+                            JOIN oceny ON uczniowie.PESEL = oceny.Id_ucznia
+                            JOIN przedmioty ON oceny.Id_przedmiotu = przedmioty.Id
+                            WHERE uczniowie.imie = @imie AND uczniowie.nazwisko = @nazwisko";
 
                 SqlCommand command = new SqlCommand(query, connection);
                 command.Parameters.AddWithValue("@imie", imie);
@@ -81,45 +129,50 @@ namespace dziennik
 
                 SqlDataReader reader = command.ExecuteReader();
 
-                // Create a new window to display the student's details
-                Window studentDetailsWindow = new Window
-                {
-                    Title = $"Details of {fullName}",
-                    Width = 400,
-                    Height = 500
-                };
+                SzczegolyUczniaPanel.Children.Clear();
 
-                StackPanel stackPanel = new StackPanel();
-                studentDetailsWindow.Content = stackPanel;
-
-                // Display student's basic information
                 if (reader.Read())
                 {
                     string pesel = reader["PESEL"].ToString();
-                    string punkty = reader["punkty"].ToString();
+                    int punkty = Convert.ToInt32(reader["punkty"]);
 
-                    stackPanel.Children.Add(new TextBlock
+                    SzczegolyUczniaPanel.Children.Add(new TextBlock
                     {
                         Text = $"Imię: {imie}",
                         FontWeight = FontWeights.Bold,
                         FontSize = 16
                     });
-                    stackPanel.Children.Add(new TextBlock
+                    SzczegolyUczniaPanel.Children.Add(new TextBlock
                     {
                         Text = $"Nazwisko: {nazwisko}",
                         FontWeight = FontWeights.Bold,
                         FontSize = 16
                     });
-                    stackPanel.Children.Add(new TextBlock { Text = $"PESEL: {pesel}" });
-                    stackPanel.Children.Add(new TextBlock { Text = $"Punkty: {punkty}" });
+                    SzczegolyUczniaPanel.Children.Add(new TextBlock { Text = $"PESEL: {pesel}" });
+                    SzczegolyUczniaPanel.Children.Add(new TextBlock { Text = $"Punkty: {punkty}" });
+
+                    Button dodaj1PunktButton = new Button { Content = "Dodaj 1 Punkt", Width = 360, Margin = new Thickness(10, 5, 10, 5) };
+                    dodaj1PunktButton.Click += (s, e) => ZmienPunkty(pesel, 1, imie, nazwisko);
+                    SzczegolyUczniaPanel.Children.Add(dodaj1PunktButton);
+
+                    Button odejmij1PunktButton = new Button { Content = "Odejmij 1 Punkt", Width = 360, Margin = new Thickness(10, 5, 10, 5) };
+                    odejmij1PunktButton.Click += (s, e) => ZmienPunkty(pesel, -1, imie, nazwisko);
+                    SzczegolyUczniaPanel.Children.Add(odejmij1PunktButton);
+
+                    Button dodaj10PunktowButton = new Button { Content = "Dodaj 10 Punktów", Width = 360, Margin = new Thickness(10, 5, 10, 5) };
+                    dodaj10PunktowButton.Click += (s, e) => ZmienPunkty(pesel, 10, imie, nazwisko);
+                    SzczegolyUczniaPanel.Children.Add(dodaj10PunktowButton);
+
+                    Button odejmij10PunktowButton = new Button { Content = "Odejmij 10 Punktów", Width = 360, Margin = new Thickness(10, 5, 10, 5) };
+                    odejmij10PunktowButton.Click += (s, e) => ZmienPunkty(pesel, -10, imie, nazwisko);
+                    SzczegolyUczniaPanel.Children.Add(odejmij10PunktowButton);
                 }
 
-                // Reset the reader to read the grades
                 reader.Close();
                 reader = command.ExecuteReader();
 
                 TreeView treeView = new TreeView();
-                stackPanel.Children.Add(treeView);
+                SzczegolyUczniaPanel.Children.Add(treeView);
 
                 Dictionary<string, TreeViewItem> drzewkoOcen = new Dictionary<string, TreeViewItem>();
 
@@ -140,8 +193,58 @@ namespace dziennik
                 }
                 reader.Close();
 
-                studentDetailsWindow.Show();
+                Button dodajOceneButton = new Button
+                {
+                    Content = "Dodaj Ocene",
+                    Width = 360,
+                    Margin = new Thickness(10, 10, 10, 10)
+                };
+                dodajOceneButton.Click += (s, e) =>
+                {
+                    DodajOceneWindow dodajOceneWindow = new DodajOceneWindow(connectionString, fullName);
+                    dodajOceneWindow.Show();
+                };
+                SzczegolyUczniaPanel.Children.Add(dodajOceneButton);
             }
+        }
+
+        private void ZmienPunkty(string pesel, int zmiana, string imie, string nazwisko)
+        {
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+                string query = "UPDATE uczniowie SET punkty = punkty + @zmiana WHERE PESEL = @pesel";
+
+                SqlCommand command = new SqlCommand(query, connection);
+                command.Parameters.AddWithValue("@zmiana", zmiana);
+                command.Parameters.AddWithValue("@pesel", pesel);
+
+                command.ExecuteNonQuery();
+            }
+
+            WyswietlSzczegolyUcznia($"{imie} {nazwisko}");
+        }
+
+
+        private void DodajOceneButton_Click(object sender, RoutedEventArgs e)
+        {
+            TreeViewItem selectedItem = DrzewkoUczniowie.SelectedItem as TreeViewItem;
+            if (selectedItem != null && selectedItem.Parent is TreeViewItem)
+            {
+                string fullName = selectedItem.Header.ToString();
+                DodajOceneWindow dodajOceneWindow = new DodajOceneWindow(connectionString, fullName);
+                dodajOceneWindow.Show();
+            }
+            else
+            {
+                MessageBox.Show("Proszę wybrać ucznia.");
+            }
+        }
+
+        private void Dodaj_Ucznia(object sender, RoutedEventArgs e)
+        {
+            DodajUczniaWindow dodajUczniaWindow = new DodajUczniaWindow();
+            dodajUczniaWindow.Show();
         }
     }
 }

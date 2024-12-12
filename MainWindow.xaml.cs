@@ -18,17 +18,18 @@ namespace dziennik
             string pesel = PeselTextBox.Text;
             string haslo = PasswordBox.Password;
 
-            if (SprawdzLogowanie(pesel, haslo)=="uczen")
+            if (SprawdzLogowanie(pesel, haslo) == "uczen")
             {
-                LoginWindow loginWindow = new LoginWindow();
-                loginWindow.Show();
+
+                Uczenlogin uczenlogin = new Uczenlogin(pesel);
+                uczenlogin.Show();
+
                 this.Close();
             }
             else if (SprawdzLogowanie(pesel, haslo) == "nauczyciel")
             {
-                LoginWindow loginWindow = new LoginWindow();
+                LoginWindow loginWindow = new LoginWindow(pesel);
                 loginWindow.Show();
- 
                 this.Close();
             }
             else
@@ -44,6 +45,7 @@ namespace dziennik
                 connection.Open();
                 string query = "SELECT COUNT(*) FROM Nauczyciele WHERE Pesel = @Pesel AND Haslo = @Haslo";
                 string query2 = "SELECT COUNT(*) FROM uczniowie WHERE Pesel = @Pesel AND Haslo = @Haslo";
+                string query3 = "SELECT wychowawca FROM klasy WHERE Pesel = @Pesel AND Haslo = @Haslo";
                 SqlCommand command = new SqlCommand(query, connection);
                 SqlCommand command2 = new SqlCommand(query2, connection);
                 command.Parameters.AddWithValue("@Pesel", pesel);
@@ -57,7 +59,7 @@ namespace dziennik
                 {
                     return "uczen";
                 }
-                else if (count>0)
+                else if (count > 0)
                 {
                     return "nauczyciel";
                 }
